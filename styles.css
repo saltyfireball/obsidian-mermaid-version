@@ -1,0 +1,241 @@
+/* ============================================================================
+   Mermaid Version - Settings UI
+   ============================================================================ */
+
+.mv-features-list {
+	margin: 0.75em 0;
+	padding-left: 1.5em;
+}
+
+.mv-features-list li {
+	margin: 0.5em 0;
+	color: var(--text-muted);
+	font-size: 0.9em;
+}
+
+.mv-status {
+	margin-top: 1.5em;
+	padding: 12px 16px;
+	border-radius: 8px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.mv-enabled {
+	background: color-mix(
+		in srgb,
+		var(--text-success, #10b981) 15%,
+		var(--background-secondary)
+	);
+	border: 1px solid
+		color-mix(in srgb, var(--text-success, #10b981) 40%, transparent);
+}
+
+.mv-enabled .mv-status-text {
+	color: var(--text-success, #10b981);
+	font-weight: 500;
+}
+
+.mv-disabled {
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+}
+
+.mv-disabled .mv-status-text {
+	color: var(--text-muted);
+}
+
+/* Preset Buttons */
+.mv-presets {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-top: 8px;
+	margin-bottom: 16px;
+}
+
+.mv-preset-label {
+	color: var(--text-muted);
+	font-size: 0.9em;
+	margin-right: 4px;
+}
+
+.mv-preset-button {
+	padding: 4px 12px;
+	font-size: 0.85em;
+	border-radius: 4px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	color: var(--text-normal);
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.mv-preset-button:hover {
+	background: var(--background-modifier-hover);
+	border-color: var(--interactive-accent);
+}
+
+.mv-preset-button.mv-preset-active {
+	background: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.mv-version-info {
+	margin-bottom: 12px;
+	color: var(--text-muted);
+	font-size: 0.9em;
+}
+
+.mv-warning {
+	margin-top: 12px;
+	padding: 10px 14px;
+	background: color-mix(in srgb, var(--text-warning, #f59e0b) 10%, var(--background-secondary));
+	border: 1px solid color-mix(in srgb, var(--text-warning, #f59e0b) 30%, transparent);
+	border-radius: 6px;
+	font-size: 0.9em;
+	color: var(--text-muted);
+}
+
+.mv-hint {
+	color: var(--text-muted);
+	font-size: 0.9em;
+	margin-bottom: 12px;
+}
+
+/* ============================================================================
+   Mermaid Auto Size - Runtime Styles
+   ============================================================================ */
+
+/* Scroll mode: wide diagrams */
+.mermaid-scroll {
+	overflow-x: auto !important;
+	overflow-y: visible !important;
+	-webkit-overflow-scrolling: touch;
+}
+
+/* Fit mode: small diagrams */
+.mermaid-fit {
+	overflow-x: hidden !important;
+}
+
+/* Centered mode: center diagrams that fit */
+.mermaid-centered {
+	display: flex !important;
+	justify-content: center !important;
+}
+
+.mermaid-centered > svg {
+	margin: 0 auto;
+}
+
+/* Base Mermaid wrapper (cosmetic) */
+.markdown-preview-view .mermaid,
+.markdown-source-view .mermaid,
+.cm-preview-code-block .mermaid {
+	display: block;
+	max-width: 100%;
+	padding: 12px 0 24px 0;
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	border-radius: 10px;
+	background: rgba(0, 0, 0, 0.1);
+}
+
+/* Disable theme SVG filters */
+.theme-dark .mermaid > svg,
+.theme-light .mermaid > svg {
+	filter: none !important;
+}
+
+/* ============================================================================
+   Mermaid Export Button
+   ============================================================================ */
+
+.mv-mermaid-export-btn {
+	position: absolute;
+	bottom: 8px;
+	right: 8px;
+	width: 28px;
+	height: 28px;
+	padding: 4px;
+	border: none;
+	border-radius: 4px;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	cursor: pointer;
+	opacity: 0;
+	transition:
+		opacity 0.15s ease,
+		background-color 0.15s ease;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 10;
+}
+
+.mermaid:hover .mv-mermaid-export-btn {
+	opacity: 1;
+}
+
+.mv-mermaid-export-btn:hover {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.mv-mermaid-export-btn svg {
+	width: 16px;
+	height: 16px;
+}
+
+/* ============================================================================
+   Mermaid Auto Size - Print / PDF Styles
+   ============================================================================ */
+
+@media print {
+	/* All mermaid containers: no scrollbars, visible overflow for print */
+	.mermaid,
+	.mermaid-scroll,
+	.mermaid-fit,
+	.markdown-preview-view .mermaid,
+	.markdown-rendered .mermaid,
+	.print .mermaid {
+		overflow: visible !important;
+		max-width: 100% !important;
+		padding-right: 6mm !important;
+		padding-left: 2mm !important;
+		box-sizing: border-box !important;
+	}
+
+	/* SCROLL diagrams only: scale down to fit page width */
+	.mermaid-scroll > svg,
+	.mermaid-scroll > svg[data-auto-sized] {
+		display: block !important;
+		width: 100% !important;
+		max-width: 100% !important;
+		min-width: 0 !important;
+		height: auto !important;
+		overflow: visible !important;
+	}
+
+	/* FIT diagrams: keep natural size, just ensure no clipping */
+	.mermaid-fit > svg,
+	.mermaid-fit > svg[data-auto-sized] {
+		display: block !important;
+		max-width: 100% !important;
+		min-width: 0 !important;
+		height: auto !important;
+		overflow: visible !important;
+	}
+
+	/* Label / foreignObject clipping fix */
+	.mermaid > svg *,
+	.mermaid > svg foreignObject,
+	.mermaid .label-container,
+	.mermaid .nodeLabel,
+	.mermaid .edgeLabel {
+		overflow: visible !important;
+	}
+}
