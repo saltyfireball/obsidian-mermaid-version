@@ -31,9 +31,9 @@ export async function loadCustomMermaid(url: string): Promise<string | null> {
 		script.src = url;
 
 		script.onload = () => {
-			const mermaid = (window as any).mermaid;
+			const mermaid = window.mermaid;
 			if (mermaid) {
-				const version = mermaid.version || mermaid.mermaidAPI?.version || "unknown";
+				const version = mermaid.version ?? mermaid.mermaidAPI?.version ?? "unknown";
 				resolve(version);
 			} else {
 				console.error("Mermaid script loaded but window.mermaid not found");
@@ -55,7 +55,7 @@ export async function loadCustomMermaid(url: string): Promise<string | null> {
  * Call this after loading a custom mermaid version.
  */
 export async function reRenderMermaidDiagrams(): Promise<number> {
-	const mermaid = (window as any).mermaid;
+	const mermaid = window.mermaid;
 	if (!mermaid) {
 		console.warn("Mermaid not available for re-rendering");
 		return 0;
@@ -100,7 +100,13 @@ export async function reRenderMermaidDiagrams(): Promise<number> {
 		try {
 			const id = `mermaid-rerender-${Date.now()}-${rendered}`;
 			const { svg } = await mermaid.render(id, source);
-			container.innerHTML = svg;
+			const parser = new DOMParser();
+			const doc = parser.parseFromString(svg, "image/svg+xml");
+			const svgEl = doc.documentElement;
+			while (container.firstChild) {
+				container.removeChild(container.firstChild);
+			}
+			container.appendChild(document.importNode(svgEl, true));
 			container.classList.add("mermaid-processed");
 			rendered++;
 		} catch (err) {
@@ -307,11 +313,7 @@ export class MermaidAutoSizer {
 						? Math.min(intrinsicWidth, maxWidthSetting)
 						: intrinsicWidth;
 
-					svg.style.setProperty("width", `${renderWidth}px`, "important");
-					svg.style.setProperty("max-width", "none", "important");
-					svg.style.setProperty("min-width", `${renderWidth}px`, "important");
-					svg.style.setProperty("height", "auto", "important");
-					svg.style.setProperty("display", "block", "important");
+					this.setSvgStyles(svg, `${renderWidth}px`, "none", `${renderWidth}px`);
 				} else {
 					container.classList.add("mermaid-fit");
 					container.classList.remove("mermaid-scroll");
@@ -322,14 +324,20 @@ export class MermaidAutoSizer {
 						container.classList.remove("mermaid-centered");
 					}
 
-					svg.style.setProperty("width", `${intrinsicWidth}px`, "important");
-					svg.style.setProperty("max-width", "100%", "important");
-					svg.style.setProperty("min-width", "0", "important");
-					svg.style.setProperty("height", "auto", "important");
-					svg.style.setProperty("display", "block", "important");
+					this.setSvgStyles(svg, `${intrinsicWidth}px`, "100%", "0");
 				}
 			});
 	}
+
+	/* eslint-disable obsidianmd/no-static-styles-assignment -- dynamic sizing with !important needed to override mermaid inline styles */
+	private setSvgStyles(svg: SVGElement, width: string, maxWidth: string, minWidth: string) {
+		svg.style.setProperty("width", width, "important");
+		svg.style.setProperty("max-width", maxWidth, "important");
+		svg.style.setProperty("min-width", minWidth, "important");
+		svg.style.setProperty("height", "auto", "important");
+		svg.style.setProperty("display", "block", "important");
+	}
+	/* eslint-enable obsidianmd/no-static-styles-assignment */
 
 	private getIntrinsicWidth(svg: SVGElement): number | null {
 		const inlineStyle = svg.getAttribute("style") || "";
@@ -377,18 +385,14 @@ export class MermaidAutoSizer {
 					maxWidth: svg.style.getPropertyValue("max-width"),
 					minWidth: svg.style.getPropertyValue("min-width"),
 				});
-				svg.style.setProperty("width", "100%", "important");
-				svg.style.setProperty("max-width", "100%", "important");
-				svg.style.setProperty("min-width", "0", "important");
+				this.setSvgStyles(svg, "100%", "100%", "0");
 			});
 	}
 
 	private restoreAfterPrint() {
 		if (!this.printBackups) return;
 		this.printBackups.forEach(({ svg, width, maxWidth, minWidth }) => {
-			svg.style.setProperty("width", width, "important");
-			svg.style.setProperty("max-width", maxWidth, "important");
-			svg.style.setProperty("min-width", minWidth, "important");
+			this.setSvgStyles(svg, width, maxWidth, minWidth);
 		});
 		this.printBackups = null;
 	}

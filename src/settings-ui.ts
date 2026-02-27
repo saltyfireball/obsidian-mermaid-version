@@ -51,8 +51,8 @@ function renderCustomMermaidSection({ plugin, containerEl }: MermaidSettingsPara
   const settings = plugin.settings;
 
   // Show current mermaid version
-  const mermaid = (window as any).mermaid;
-  const currentVersion = mermaid?.version || "unknown";
+  const mermaid = window.mermaid;
+  const currentVersion = mermaid?.version ?? "unknown";
   const versionDisplay = containerEl.createDiv("mv-version-info");
   versionDisplay.createEl("span", {
     text: `Current Mermaid version: ${currentVersion}`,
@@ -77,11 +77,11 @@ function renderCustomMermaidSection({ plugin, containerEl }: MermaidSettingsPara
 
   // CDN URL input
   new Setting(containerEl)
-    .setName("Mermaid CDN URL")
-    .setDesc("URL to the mermaid.min.js file. You can use jsDelivr, unpkg, or cdnjs.")
+    .setName("Custom version URL")
+    .setDesc("Link to the Mermaid library file.")
     .addText((text) =>
       text
-        .setPlaceholder("https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js")
+        .setPlaceholder("https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.js")
         .setValue(settings.customVersionUrl)
         .onChange(async (value) => {
           settings.customVersionUrl = value.trim();
@@ -105,18 +105,20 @@ function renderCustomMermaidSection({ plugin, containerEl }: MermaidSettingsPara
       cls: "mv-preset-button",
     });
     btn.classList.toggle("mv-preset-active", settings.customVersionUrl === preset.url);
-    btn.addEventListener("click", async () => {
-      settings.customVersionUrl = preset.url;
-      await plugin.saveSettings();
-      // Update text input
-      const textInput = containerEl.querySelector('input[placeholder*="cdn.jsdelivr"]') as HTMLInputElement;
-      if (textInput) {
-        textInput.value = preset.url;
-      }
-      // Update button states
-      presetContainer.querySelectorAll(".mv-preset-button").forEach((b, i) => {
-        b.classList.toggle("mv-preset-active", presetUrls[i]?.url === preset.url);
-      });
+    btn.addEventListener("click", () => {
+      void (async () => {
+        settings.customVersionUrl = preset.url;
+        await plugin.saveSettings();
+        // Update text input
+        const textInput = containerEl.querySelector('input[placeholder*="cdn.jsdelivr"]') as HTMLInputElement;
+        if (textInput) {
+          textInput.value = preset.url;
+        }
+        // Update button states
+        presetContainer.querySelectorAll(".mv-preset-button").forEach((b, i) => {
+          b.classList.toggle("mv-preset-active", presetUrls[i]?.url === preset.url);
+        });
+      })();
     });
   });
 
@@ -126,7 +128,7 @@ function renderCustomMermaidSection({ plugin, containerEl }: MermaidSettingsPara
     .setDesc("Load the custom Mermaid version immediately and re-render all diagrams. Use this to test before restarting.")
     .addButton((btn) =>
       btn
-        .setButtonText("Load & Re-render")
+        .setButtonText("Load & re-render")
         .setCta()
         .onClick(async () => {
           if (!settings.customVersionUrl) {
@@ -153,10 +155,10 @@ function renderCustomMermaidSection({ plugin, containerEl }: MermaidSettingsPara
             }
           } catch (err) {
             console.error("Error loading custom mermaid:", err);
-            new Notice(`Error: ${err}`);
+            new Notice(`Error: ${err instanceof Error ? err.message : String(err)}`);
           } finally {
             btn.setDisabled(false);
-            btn.setButtonText("Load & Re-render");
+            btn.setButtonText("Load & re-render");
           }
         })
     );
@@ -218,7 +220,7 @@ function renderAutoSizeSection({ plugin, containerEl }: MermaidSettingsParams) {
 
   new Setting(containerEl)
     .setName("Maximum diagram width")
-    .setDesc("Optional: Limit the rendered width of wide diagrams (in pixels). Diagrams that need scrolling will be capped at this width. Set to 0 for no limit.")
+    .setDesc("Limit the rendered width of wide diagrams (in pixels). Diagrams that need scrolling will be capped at this width. Set to 0 for no limit.")
     .addText((text) => {
       maxWidthInput = text.inputEl;
       text
@@ -266,7 +268,7 @@ function renderAutoSizeSection({ plugin, containerEl }: MermaidSettingsParams) {
       cls: "mv-preset-button",
     });
     btn.classList.toggle("mv-preset-active", settings.maxWidth === preset.value);
-    btn.addEventListener("click", () => applyMaxWidth(preset.value));
+    btn.addEventListener("click", () => void applyMaxWidth(preset.value));
     presetButtons.push(btn);
   });
 
@@ -322,7 +324,7 @@ function renderExportSection({ plugin, containerEl }: MermaidSettingsParams) {
 
   new Setting(containerEl)
     .setName("Enable export button")
-    .setDesc("Show a download button on mermaid diagrams for PNG export. Hover over a diagram to see the button.")
+    .setDesc("Show a download button on Mermaid diagrams to export as an image, visible on hover.")
     .addToggle((toggle) =>
       toggle
         .setValue(plugin.settings.exportEnabled)

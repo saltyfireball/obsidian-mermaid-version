@@ -1,15 +1,5 @@
 import { App, Notice } from "obsidian";
 
-declare global {
-	interface Window {
-		mermaid?: {
-			render: (id: string, code: string) => Promise<{ svg: string }>;
-			initialize: (config: Record<string, unknown>) => void;
-			parse: (code: string) => Promise<boolean>;
-		};
-	}
-}
-
 async function shareOrDownload(input: {
 	data: Blob;
 	filename: string;
@@ -173,7 +163,7 @@ function getSafeFontFamily(): string {
 	const fontParts = rawFont.split(",").map((f) => f.trim().replace(/^["']+|["']+$/g, "").trim());
 
 	for (const font of fontParts) {
-		if (/^[a-zA-Z0-9\s\-]+$/.test(font) && font.length > 1) {
+		if (/^[a-zA-Z0-9\s-]+$/.test(font) && font.length > 1) {
 			validFonts.push(font.includes(" ") ? `"${font}"` : font);
 		}
 	}
@@ -355,7 +345,7 @@ async function svgToPng(svg: SVGElement, container: HTMLElement, backgroundColor
 				}
 			} catch (canvasError) {
 				console.error("Canvas error:", canvasError);
-				reject(canvasError);
+				reject(canvasError instanceof Error ? canvasError : new Error("Canvas rendering failed"));
 			}
 		};
 
@@ -386,7 +376,7 @@ async function exportMermaid(app: App, svg: SVGElement, container: HTMLElement):
 		new Notice(`Downloading: ${filename}`, 3000);
 	} catch (err) {
 		console.error("Mermaid export error:", err);
-		new Notice(`Export failed: ${err}`, 5000);
+		new Notice(`Export failed: ${err instanceof Error ? err.message : String(err)}`, 5000);
 	}
 }
 
@@ -394,7 +384,35 @@ function createExportButton(): HTMLButtonElement {
 	const btn = document.createElement("button");
 	btn.className = "mv-mermaid-export-btn";
 	btn.setAttribute("aria-label", "Export diagram");
-	btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+
+	const svgNs = "http://www.w3.org/2000/svg";
+	const svg = document.createElementNS(svgNs, "svg");
+	svg.setAttribute("xmlns", svgNs);
+	svg.setAttribute("width", "16");
+	svg.setAttribute("height", "16");
+	svg.setAttribute("viewBox", "0 0 24 24");
+	svg.setAttribute("fill", "none");
+	svg.setAttribute("stroke", "currentColor");
+	svg.setAttribute("stroke-width", "2");
+	svg.setAttribute("stroke-linecap", "round");
+	svg.setAttribute("stroke-linejoin", "round");
+
+	const path = document.createElementNS(svgNs, "path");
+	path.setAttribute("d", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4");
+	svg.appendChild(path);
+
+	const polyline = document.createElementNS(svgNs, "polyline");
+	polyline.setAttribute("points", "7 10 12 15 17 10");
+	svg.appendChild(polyline);
+
+	const line = document.createElementNS(svgNs, "line");
+	line.setAttribute("x1", "12");
+	line.setAttribute("y1", "15");
+	line.setAttribute("x2", "12");
+	line.setAttribute("y2", "3");
+	svg.appendChild(line);
+
+	btn.appendChild(svg);
 	return btn;
 }
 
@@ -404,7 +422,7 @@ function addExportButtonToContainer(app: App, container: HTMLElement, svg: SVGEl
 	}
 
 	const btn = createExportButton();
-	container.style.position = "relative";
+	container.setCssStyles({ position: "relative" });
 	container.appendChild(btn);
 
 	btn.addEventListener("click", (e) => {

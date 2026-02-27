@@ -50,8 +50,9 @@ export default class MermaidVersionPlugin extends Plugin {
 	}
 
 	async loadSettings() {
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- loadData returns any
 		const data = await this.loadData();
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, data as Partial<MermaidVersionSettings>);
 	}
 
 	async saveSettings() {
