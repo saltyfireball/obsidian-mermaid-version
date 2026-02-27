@@ -150,6 +150,12 @@ export class MermaidAutoSizer {
 							return;
 						}
 					}
+					if (node instanceof SVGElement && node.parentElement?.classList?.contains("mermaid")) {
+						this.lazyObserver?.disconnect();
+						this.lazyObserver = null;
+						this.startFullObservation();
+						return;
+					}
 				}
 			}
 		});
@@ -175,6 +181,11 @@ export class MermaidAutoSizer {
 						if (node.classList?.contains("mermaid") || node.querySelector?.(".mermaid")) {
 							return true;
 						}
+					}
+					// Detect SVG replaced inside an existing .mermaid container
+					// (live preview re-renders SVG content without re-adding .mermaid)
+					if (node instanceof SVGElement && node.parentElement?.classList?.contains("mermaid")) {
+						return true;
 					}
 				}
 				if (mutation.target instanceof HTMLElement) {
