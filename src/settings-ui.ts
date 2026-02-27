@@ -42,7 +42,7 @@ export function renderSettingsTab({ plugin, containerEl }: MermaidSettingsParams
 }
 
 function renderCustomMermaidSection({ plugin, containerEl }: MermaidSettingsParams) {
-  containerEl.createEl("h2", { text: "Custom Mermaid Version" });
+  new Setting(containerEl).setName("Custom Mermaid version").setHeading();
   containerEl.createEl("p", {
     text: "Override Obsidian's bundled Mermaid with a newer version from CDN. Useful for accessing latest diagram features.",
     cls: "mv-hint",
@@ -172,7 +172,7 @@ function renderCustomMermaidSection({ plugin, containerEl }: MermaidSettingsPara
 }
 
 function renderAutoSizeSection({ plugin, containerEl }: MermaidSettingsParams) {
-  containerEl.createEl("h2", { text: "Mermaid Auto Size" });
+  new Setting(containerEl).setName("Mermaid auto size").setHeading();
   containerEl.createEl("p", {
     text: "Automatically sizes Mermaid diagrams: small ones fit the container, wide ones get horizontal scroll.",
     cls: "mv-hint",
@@ -289,7 +289,7 @@ function renderAutoSizeSection({ plugin, containerEl }: MermaidSettingsParams) {
     );
 
   // Features description
-  containerEl.createEl("h3", { text: "Features" });
+  new Setting(containerEl).setName("Features").setHeading();
 
   const featuresList = containerEl.createEl("ul", { cls: "mv-features-list" });
 
@@ -318,7 +318,7 @@ function renderAutoSizeSection({ plugin, containerEl }: MermaidSettingsParams) {
 }
 
 function renderExportSection({ plugin, containerEl }: MermaidSettingsParams) {
-  containerEl.createEl("h2", { text: "Mermaid Export" });
+  new Setting(containerEl).setName("Mermaid export").setHeading();
 
   new Setting(containerEl)
     .setName("Enable export button")
@@ -337,7 +337,7 @@ function renderExportSection({ plugin, containerEl }: MermaidSettingsParams) {
 }
 
 function renderUsageSection(containerEl: HTMLElement) {
-  containerEl.createEl("h2", { text: "Usage" });
+  new Setting(containerEl).setName("Usage").setHeading();
 
   const table = containerEl.createEl("table");
   const thead = table.createEl("thead");
