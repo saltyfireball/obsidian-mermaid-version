@@ -88,6 +88,25 @@ export function stopMermaidExport(plugin: MermaidVersionPlugin): void {
 }
 
 /**
+ * Re-render diagrams with retries to handle diagrams not yet in the DOM.
+ */
+async function reRenderWithRetry(plugin: MermaidVersionPlugin): Promise<void> {
+	const delays = [0, 500, 1500, 3000, 6000];
+	for (const delay of delays) {
+		if (delay > 0) {
+			await new Promise((r) => setTimeout(r, delay));
+		}
+		const count = await reRenderMermaidDiagrams();
+		if (count > 0) {
+			plugin.mermaidAutoSizer?.onCustomVersionLoaded();
+			return;
+		}
+	}
+	// Final fallback: notify auto-sizer so its observer handles future diagrams
+	plugin.mermaidAutoSizer?.onCustomVersionLoaded();
+}
+
+/**
  * Load custom mermaid version from CDN.
  */
 function loadCustomMermaidVersion(plugin: MermaidVersionPlugin): void {
@@ -99,10 +118,8 @@ function loadCustomMermaidVersion(plugin: MermaidVersionPlugin): void {
 		const version = await loadCustomMermaid(url);
 		if (version) {
 			plugin.customVersionLoaded = true;
-			// Re-render any diagrams that were rendered with the old version
-			await reRenderMermaidDiagrams();
-			// Notify auto-sizer to re-render any diagrams it already processed
-			plugin.mermaidAutoSizer?.onCustomVersionLoaded();
+			// Re-render diagrams, retrying since they may not be in the DOM yet
+			await reRenderWithRetry(plugin);
 		} else {
 			console.warn("Failed to load custom Mermaid, falling back to Obsidian's version");
 		}
