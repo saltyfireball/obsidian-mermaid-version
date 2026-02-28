@@ -1,5 +1,6 @@
+import { MarkdownView } from "obsidian";
 import type MermaidVersionPlugin from "./main";
-import { MermaidAutoSizer, loadCustomMermaid, reRenderMermaidDiagrams } from "./auto-sizer";
+import { MermaidAutoSizer, loadCustomMermaid } from "./auto-sizer";
 import { MermaidExporter } from "./export";
 
 /**
@@ -88,22 +89,27 @@ export function stopMermaidExport(plugin: MermaidVersionPlugin): void {
 }
 
 /**
- * Re-render diagrams with retries to handle diagrams not yet in the DOM.
+ * Force all open markdown views to re-render after custom mermaid loads.
+ * Since window.mermaid is now the new version, Obsidian's own re-render uses it.
  */
-async function reRenderWithRetry(plugin: MermaidVersionPlugin): Promise<void> {
-	const delays = [0, 500, 1500, 3000, 6000];
+function forceReRenderAllViews(plugin: MermaidVersionPlugin): void {
+	const delays = [200, 1000, 3000];
 	for (const delay of delays) {
-		if (delay > 0) {
-			await new Promise((r) => setTimeout(r, delay));
-		}
-		const count = await reRenderMermaidDiagrams();
-		if (count > 0) {
-			plugin.mermaidAutoSizer?.onCustomVersionLoaded();
-			return;
-		}
+		setTimeout(() => {
+			plugin.app.workspace.getLeavesOfType("markdown").forEach((leaf) => {
+				const view = leaf.view;
+				if (view instanceof MarkdownView) {
+					// Reading mode
+					if (view.previewMode?.rerender) {
+						view.previewMode.rerender(true);
+					}
+					// Live preview - force CM6 to rebuild by resetting view state
+					const state = leaf.getViewState();
+					void leaf.setViewState(state);
+				}
+			});
+		}, delay);
 	}
-	// Final fallback: notify auto-sizer so its observer handles future diagrams
-	plugin.mermaidAutoSizer?.onCustomVersionLoaded();
 }
 
 /**
@@ -118,8 +124,8 @@ function loadCustomMermaidVersion(plugin: MermaidVersionPlugin): void {
 		const version = await loadCustomMermaid(url);
 		if (version) {
 			plugin.customVersionLoaded = true;
-			// Re-render diagrams, retrying since they may not be in the DOM yet
-			await reRenderWithRetry(plugin);
+			// Force Obsidian to re-render views using the new window.mermaid
+			forceReRenderAllViews(plugin);
 		} else {
 			console.warn("Failed to load custom Mermaid, falling back to Obsidian's version");
 		}
