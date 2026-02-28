@@ -126,8 +126,10 @@ export class MermaidAutoSizer {
 	private beforePrintHandler: (() => void) | null = null;
 	private afterPrintHandler: (() => void) | null = null;
 	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+	private reRenderTimer: ReturnType<typeof setTimeout> | null = null;
 	private printBackups: PrintBackup[] | null = null;
 	private fullyStarted = false;
+	private reRendering = false;
 
 	constructor(plugin: Plugin, settings: MermaidVersionSettings) {
 		this.plugin = plugin;
@@ -181,29 +183,41 @@ export class MermaidAutoSizer {
 		this.sizeMermaidSvgs();
 
 		this.observer = new MutationObserver((mutations) => {
-			const hasMermaidChange = mutations.some((mutation) => {
+			if (this.reRendering) return;
+
+			const changedContainers = new Set<Element>();
+			for (const mutation of mutations) {
 				for (const node of Array.from(mutation.addedNodes)) {
 					if (node instanceof HTMLElement) {
-						if (node.classList?.contains("mermaid") || node.querySelector?.(".mermaid")) {
-							return true;
+						if (node.classList?.contains("mermaid")) {
+							changedContainers.add(node);
+						} else if (node.querySelector?.(".mermaid")) {
+							node.querySelectorAll(".mermaid").forEach((el) => changedContainers.add(el));
 						}
 					}
 					// Detect SVG replaced inside an existing .mermaid container
 					// (live preview re-renders SVG content without re-adding .mermaid)
 					if (node instanceof SVGElement && node.parentElement?.classList?.contains("mermaid")) {
-						return true;
+						const parent = node.parentElement;
+						// Obsidian re-rendered over our custom render; clear marker so we re-render
+						parent.removeAttribute("data-mv-rendered");
+						changedContainers.add(parent);
 					}
 				}
 				if (mutation.target instanceof HTMLElement) {
-					if (mutation.target.closest?.(".mermaid")) {
-						return true;
+					const mermaidEl = mutation.target.closest?.(".mermaid");
+					if (mermaidEl) {
+						changedContainers.add(mermaidEl);
 					}
 				}
-				return false;
-			});
+			}
 
-			if (hasMermaidChange) {
-				this.debouncedSize();
+			if (changedContainers.size > 0) {
+				if (this.settings.customVersionEnabled && window.mermaid) {
+					this.debouncedReRender(changedContainers);
+				} else {
+					this.debouncedSize();
+				}
 			}
 		});
 
@@ -245,7 +259,9 @@ export class MermaidAutoSizer {
 		if (this.afterPrintHandler)
 			window.removeEventListener("afterprint", this.afterPrintHandler);
 		if (this.debounceTimer) clearTimeout(this.debounceTimer);
+		if (this.reRenderTimer) clearTimeout(this.reRenderTimer);
 		this.fullyStarted = false;
+		this.reRendering = false;
 
 		document
 			.querySelectorAll(".mermaid-scroll, .mermaid-fit, .mermaid-centered")
@@ -269,6 +285,60 @@ export class MermaidAutoSizer {
 		this.debounceTimer = setTimeout(() => {
 			this.sizeMermaidSvgs();
 		}, 100);
+	}
+
+	private debouncedReRender(containers: Set<Element>) {
+		if (this.reRenderTimer) clearTimeout(this.reRenderTimer);
+		this.reRenderTimer = setTimeout(() => {
+			void this.reRenderContainers(containers);
+		}, 150);
+	}
+
+	private async reRenderContainers(containers: Set<Element>): Promise<void> {
+		const mermaid = window.mermaid;
+		if (!mermaid) return;
+
+		this.reRendering = true;
+		mermaid.initialize({ startOnLoad: false });
+
+		let rendered = 0;
+		for (const container of containers) {
+			// Skip if already re-rendered with custom version
+			if (container.getAttribute("data-mv-rendered") === "true") continue;
+
+			let source = container.getAttribute("data-mermaid");
+			if (!source) {
+				const codeEl = container.querySelector("code");
+				if (codeEl) {
+					source = codeEl.textContent;
+				}
+			}
+			if (!source && container.tagName === "PRE") {
+				source = container.textContent;
+			}
+			if (!source) continue;
+
+			try {
+				const id = `mermaid-lp-${Date.now()}-${rendered}`;
+				const { svg } = await mermaid.render(id, source);
+				const parser = new DOMParser();
+				const doc = parser.parseFromString(svg, "image/svg+xml");
+				const svgEl = doc.documentElement;
+				while (container.firstChild) {
+					container.removeChild(container.firstChild);
+				}
+				container.appendChild(document.importNode(svgEl, true));
+				container.setAttribute("data-mv-rendered", "true");
+				rendered++;
+			} catch {
+				// Custom version also failed - leave Obsidian's render in place
+			}
+		}
+
+		this.reRendering = false;
+		if (rendered > 0) {
+			this.debouncedSize();
+		}
 	}
 
 	private resetAndResize() {
