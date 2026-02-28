@@ -197,7 +197,11 @@ export class MermaidAutoSizer {
 		if (this.fullyStarted) return;
 		this.fullyStarted = true;
 
-		this.sizeMermaidSvgs();
+		if (this.plugin.customVersionLoaded) {
+			this.onCustomVersionLoaded();
+		} else {
+			this.sizeMermaidSvgs();
+		}
 
 		this.observer = new MutationObserver((mutations) => {
 			if (this.reRendering) return;
