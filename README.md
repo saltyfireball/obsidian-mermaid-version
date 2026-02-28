@@ -40,13 +40,11 @@ Hover over any Mermaid diagram to reveal a download button for PNG export.
 
 ## Installation
 
-### From Obsidian Community Plugins
+### From Obsidian Community Plugins (**Not submitted yet**)
 
-**May not be approved yet**
-
-1. Open Settings > Community Plugins
-2. Search for "Mermaid Version"
-3. Click Install, then Enable
+~~1. Open Settings > Community Plugins~~
+~~2. Search for "Mermaid Version"~~
+~~3. Click Install, then Enable~~
 
 ### Manual Installation
 
