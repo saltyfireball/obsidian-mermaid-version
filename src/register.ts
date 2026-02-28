@@ -98,8 +98,11 @@ function loadCustomMermaidVersion(plugin: MermaidVersionPlugin): void {
 	plugin.app.workspace.onLayoutReady(async () => {
 		const version = await loadCustomMermaid(url);
 		if (version) {
+			plugin.customVersionLoaded = true;
 			// Re-render any diagrams that were rendered with the old version
 			await reRenderMermaidDiagrams();
+			// Notify auto-sizer to re-render any diagrams it already processed
+			plugin.mermaidAutoSizer?.onCustomVersionLoaded();
 		} else {
 			console.warn("Failed to load custom Mermaid, falling back to Obsidian's version");
 		}

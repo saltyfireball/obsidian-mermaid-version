@@ -1,4 +1,4 @@
-import type { Plugin } from "obsidian";
+import type MermaidVersionPlugin from "./main";
 import type { MermaidVersionSettings } from "./main";
 
 interface PrintBackup {
@@ -118,7 +118,7 @@ export async function reRenderMermaidDiagrams(): Promise<number> {
 }
 
 export class MermaidAutoSizer {
-	private plugin: Plugin;
+	private plugin: MermaidVersionPlugin;
 	private settings: MermaidVersionSettings;
 	private observer: MutationObserver | null = null;
 	private lazyObserver: MutationObserver | null = null;
@@ -131,9 +131,26 @@ export class MermaidAutoSizer {
 	private fullyStarted = false;
 	private reRendering = false;
 
-	constructor(plugin: Plugin, settings: MermaidVersionSettings) {
+	constructor(plugin: MermaidVersionPlugin, settings: MermaidVersionSettings) {
 		this.plugin = plugin;
 		this.settings = settings;
+	}
+
+	/**
+	 * Called when the custom CDN Mermaid version finishes loading.
+	 * Re-renders all existing diagrams that were rendered with Obsidian's built-in version.
+	 */
+	onCustomVersionLoaded(): void {
+		const containers = new Set<Element>();
+		document.querySelectorAll(".mermaid").forEach((el) => {
+			// Only re-render diagrams not already rendered with custom version
+			if (el.getAttribute("data-mv-rendered") !== "true") {
+				containers.add(el);
+			}
+		});
+		if (containers.size > 0) {
+			void this.reRenderContainers(containers);
+		}
 	}
 
 	start() {
@@ -213,7 +230,7 @@ export class MermaidAutoSizer {
 			}
 
 			if (changedContainers.size > 0) {
-				if (this.settings.customVersionEnabled && window.mermaid) {
+				if (this.plugin.customVersionLoaded && window.mermaid) {
 					this.debouncedReRender(changedContainers);
 				} else {
 					this.debouncedSize();

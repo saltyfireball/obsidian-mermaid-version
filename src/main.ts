@@ -27,8 +27,9 @@ export const DEFAULT_SETTINGS: MermaidVersionSettings = {
 
 export default class MermaidVersionPlugin extends Plugin {
 	settings!: MermaidVersionSettings;
-	mermaidAutoSizer?: { start(): void; stop(): void };
+	mermaidAutoSizer?: { start(): void; stop(): void; onCustomVersionLoaded(): void };
 	mermaidExporter?: { start(): void; stop(): void };
+	customVersionLoaded = false;
 
 	async onload() {
 		await this.loadSettings();
