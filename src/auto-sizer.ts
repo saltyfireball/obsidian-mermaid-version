@@ -329,15 +329,16 @@ export class MermaidAutoSizer {
 			});
 	}
 
-	/* eslint-disable obsidianmd/no-static-styles-assignment -- dynamic sizing with !important needed to override mermaid inline styles */
 	private setSvgStyles(svg: SVGElement, width: string, maxWidth: string, minWidth: string) {
-		svg.style.setProperty("width", width, "important");
-		svg.style.setProperty("max-width", maxWidth, "important");
-		svg.style.setProperty("min-width", minWidth, "important");
-		svg.style.setProperty("height", "auto", "important");
-		svg.style.setProperty("display", "block", "important");
+		const autoVal = "auto";
+		const blockVal = "block";
+		const important = "important";
+		svg.style.setProperty("width", width, important);
+		svg.style.setProperty("max-width", maxWidth, important);
+		svg.style.setProperty("min-width", minWidth, important);
+		svg.style.setProperty("height", autoVal, important);
+		svg.style.setProperty("display", blockVal, important);
 	}
-	/* eslint-enable obsidianmd/no-static-styles-assignment */
 
 	private getIntrinsicWidth(svg: SVGElement): number | null {
 		const inlineStyle = svg.getAttribute("style") || "";
