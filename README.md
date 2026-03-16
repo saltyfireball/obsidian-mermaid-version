@@ -40,18 +40,35 @@ Hover over any Mermaid diagram to reveal a download button for PNG export.
 
 ## Installation
 
-### From Obsidian Community Plugins (**Not submitted yet**)
+### Obsidian Community Plugin (pending)
 
-~~1. Open Settings > Community Plugins~~
-~~2. Search for "Mermaid Version"~~
-~~3. Click Install, then Enable~~
+This plugin has been submitted for review to the Obsidian community plugin directory. Once approved, you will be able to install it directly from **Settings > Community plugins > Browse** by searching for "Mermaid Version".
 
-### Manual Installation
+### Using BRAT
 
-1. Download `main.js`, `manifest.json`, and `styles.css` from the latest release
-2. Create a folder `mermaid-version` in your vault's `.obsidian/plugins/` directory
-3. Copy the downloaded files into the folder
-4. Enable the plugin in Settings > Community Plugins
+You can install this plugin right now using the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin:
+
+1. Install BRAT from **Settings > Community plugins > Browse** (search for "BRAT" by TfTHacker)
+2. Open the BRAT settings
+3. Under the **Beta plugins** section, click **Add beta plugin**
+
+   ![BRAT beta plugin list](assets/brat_example_beta_plugin_list.png)
+
+4. In the overlay, enter this plugin's repository: `https://github.com/saltyfireball/obsidian-mermaid-version` (or just `saltyfireball/obsidian-mermaid-version`)
+
+   ![BRAT add beta plugin](assets/brat_example_beta_modal.png)
+
+5. Leave the version set to latest
+
+   ![BRAT beta plugin filled](assets/brat_example_beta_modal_filled.png)
+
+6. Click **Add plugin**
+
+### Manual
+
+1. Download the latest release from the [Releases](https://github.com/saltyfireball/obsidian-mermaid-version/releases) page
+2. Copy `main.js`, `manifest.json`, and `styles.css` into your vault's `.obsidian/plugins/mermaid-version/` directory
+3. Enable the plugin in **Settings > Community plugins**
 
 ## Settings
 
