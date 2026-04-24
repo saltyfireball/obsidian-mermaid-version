@@ -335,6 +335,20 @@ function renderExportSection({ plugin, containerEl }: MermaidSettingsParams) {
         })
     );
 
+  new Setting(containerEl)
+    .setName("Export resolution scale")
+    .setDesc("Multiplier for exported image resolution. Higher = sharper but larger file. Default 3x. Recommended 2-4x.")
+    .addSlider((slider) =>
+      slider
+        .setLimits(1, 6, 1)
+        .setValue(plugin.settings.exportScale || 3)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          plugin.settings.exportScale = value;
+          await plugin.saveSettings();
+        })
+    );
+
   containerEl.createEl("hr");
 }
 

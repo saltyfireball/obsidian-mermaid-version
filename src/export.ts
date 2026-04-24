@@ -41,167 +41,39 @@ function getSvgDimensions(svg: SVGElement): { width: number; height: number; vie
 	return { width, height, viewBox };
 }
 
-function findMermaidSource(container: HTMLElement): string | null {
-	const source = container.getAttribute("data-mermaid");
-	if (source) {
-		return source;
-	}
-
-	let parent = container.parentElement;
-	while (parent) {
-		const parentSource = parent.getAttribute("data-mermaid");
-		if (parentSource) {
-			return parentSource;
-		}
-		const codeBlock = parent.querySelector("pre code, code.language-mermaid");
-		if (codeBlock) {
-			return codeBlock.textContent || null;
-		}
-		parent = parent.parentElement;
-	}
-
-	return null;
-}
-
-let exportCounter = 0;
-function generateExportId(): string {
-	return `mermaid-export-${Date.now()}-${++exportCounter}`;
-}
-
-async function renderMermaidForExport(source: string, backgroundColor: string): Promise<string | null> {
-	const mermaid = window.mermaid;
-	if (!mermaid) {
-		console.warn("Mermaid not available on window");
-		return null;
-	}
-
-	const isDarkMode = document.body.classList.contains("theme-dark");
-	const exportId = generateExportId();
-
-	try {
-		const fontFamily = getSafeFontFamily();
-
-		const baseThemeVars = {
-			fontFamily: fontFamily,
-			fontSize: "14px",
-			commitLabelFontSize: "12px",
-			tagLabelFontSize: "12px",
-		};
-		mermaid.initialize({
-			startOnLoad: false,
-			theme: isDarkMode ? "dark" : "default",
-			fontFamily: fontFamily,
-			themeVariables: isDarkMode ? {
-				...baseThemeVars,
-				background: backgroundColor,
-				primaryColor: "#4a9eff",
-				primaryTextColor: "#ffffff",
-				primaryBorderColor: "#4a9eff",
-				lineColor: "#dcddde",
-				textColor: "#dcddde",
-				mainBkg: backgroundColor,
-			} : {
-				...baseThemeVars,
-				background: backgroundColor,
-			},
-		});
-
-		const { svg } = await mermaid.render(exportId, source);
-
-		const parser = new DOMParser();
-		const doc = parser.parseFromString(svg, "image/svg+xml");
-		const svgEl = doc.querySelector("svg");
-
-		if (!svgEl) {
-			return null;
-		}
-
-		const viewBox = svgEl.getAttribute("viewBox");
-		let bgX = "0", bgY = "0", bgWidth = "100%", bgHeight = "100%";
-		if (viewBox) {
-			const parts = viewBox.split(/[\s,]+/);
-			bgX = parts[0] || "0";
-			bgY = parts[1] || "0";
-			bgWidth = parts[2] || "100%";
-			bgHeight = parts[3] || "100%";
-		}
-
-		const bgRect = doc.createElementNS("http://www.w3.org/2000/svg", "rect");
-		bgRect.setAttribute("x", bgX);
-		bgRect.setAttribute("y", bgY);
-		bgRect.setAttribute("width", bgWidth);
-		bgRect.setAttribute("height", bgHeight);
-		bgRect.setAttribute("fill", backgroundColor);
-		svgEl.insertBefore(bgRect, svgEl.firstChild);
-
-		if (!svgEl.getAttribute("xmlns")) {
-			svgEl.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-		}
-
-		const serializer = new XMLSerializer();
-		return '<?xml version="1.0" encoding="UTF-8"?>\n' + serializer.serializeToString(svgEl);
-	} catch (err) {
-		console.error("Error rendering mermaid for export:", err);
-		return null;
-	}
-}
-
-function getSafeFontFamily(): string {
-	const bodyStyle = window.getComputedStyle(document.body);
-	const rawFont = bodyStyle.getPropertyValue("--font-text").trim()
-		|| bodyStyle.getPropertyValue("--font-interface").trim()
-		|| bodyStyle.fontFamily
-		|| "";
-
-	const hasNonAscii = [...rawFont].some((c) => c.charCodeAt(0) > 127);
-
-	if (hasNonAscii) {
-		return '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-	}
-
-	const validFonts: string[] = [];
-	const fontParts = rawFont.split(",").map((f) => f.trim().replace(/^["']+|["']+$/g, "").trim());
-
-	for (const font of fontParts) {
-		if (/^[a-zA-Z0-9\s-]+$/.test(font) && font.length > 1) {
-			validFonts.push(font.includes(" ") ? `"${font}"` : font);
-		}
-	}
-
-	return validFonts.length > 0
-		? validFonts.join(", ")
-		: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
-}
-
 function createPngSvgFallback(svg: SVGElement, backgroundColor: string): string {
 	const clone = svg.cloneNode(true) as SVGElement;
 	const isDarkMode = document.body.classList.contains("theme-dark");
 	const textColor = isDarkMode ? "#dcddde" : "#1e1e1e";
-	const safeFontFamily = getSafeFontFamily();
+	// The SVG is rasterized standalone via data URI, where Obsidian's @font-face fonts
+	// (e.g. Inter) are NOT available. Use the platform UI font stack -- SF Pro on Mac,
+	// Segoe UI on Windows, Roboto on Android -- all of which are close in metrics to
+	// Inter, so text widths stay close to what mermaid laid out for.
+	const safeFontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
 	if (!clone.getAttribute("xmlns")) {
 		clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
 	}
 	clone.setAttribute("xmlns:xhtml", "http://www.w3.org/1999/xhtml");
 
-	const viewBox = svg.getAttribute("viewBox");
-	let bgX = "0", bgY = "0", bgWidth = "100%", bgHeight = "100%";
-	if (viewBox) {
-		const parts = viewBox.split(/[\s,]+/);
-		bgX = parts[0] || "0";
-		bgY = parts[1] || "0";
-		bgWidth = parts[2] || "100%";
-		bgHeight = parts[3] || "100%";
-	}
-
+	// Font substitution on SVG text nodes.
 	clone.querySelectorAll("text, tspan").forEach((el) => {
 		(el as SVGElement).style.fontFamily = safeFontFamily;
 	});
 
-	clone.querySelectorAll("foreignObject *").forEach((el) => {
-		if (el instanceof HTMLElement) {
-			el.style.fontFamily = safeFontFamily;
-		}
+	// Font substitution + overflow-visible on HTML inside foreignObjects.
+	clone.querySelectorAll("foreignObject").forEach((fo) => {
+		fo.setAttribute("overflow", "visible");
+		(fo as unknown as HTMLElement).style.overflow = "visible";
+		fo.querySelectorAll("*").forEach((el) => {
+			if (el instanceof HTMLElement) {
+				el.style.fontFamily = safeFontFamily;
+				el.style.overflow = "visible";
+				if (!el.style.whiteSpace) {
+					el.style.whiteSpace = "nowrap";
+				}
+			}
+		});
 	});
 
 	clone.querySelectorAll("style").forEach((styleEl) => {
@@ -213,12 +85,123 @@ function createPngSvgFallback(svg: SVGElement, backgroundColor: string): string 
 		}
 	});
 
+	// Ensure arrowhead markers are visible. Handle:
+	//  - Missing fill  -> default to textColor (in dark mode) so arrows are visible on dark bg
+	//  - var(...)      -> replaced with textColor
+	//  - inherit       -> replaced with textColor
+	//  - context-stroke / context-fill  -> these keywords often don't resolve when the
+	//    SVG is rasterized standalone via data URI, silently hiding the arrowhead
 	clone.querySelectorAll("defs marker path, defs marker polygon, defs marker circle").forEach((el) => {
-		const fill = el.getAttribute("fill");
-		if (!fill || fill.includes("var(") || fill === "inherit") {
+		(["fill", "stroke"] as const).forEach((attr) => {
+			const val = el.getAttribute(attr);
+			if (val && (val.includes("var(") || val === "inherit" || val.includes("context-"))) {
+				el.setAttribute(attr, textColor);
+			}
+		});
+		if (!el.getAttribute("fill")) {
 			el.setAttribute("fill", textColor);
 		}
+		const style = el.getAttribute("style");
+		if (style && style.includes("context-")) {
+			el.setAttribute("style", style.replace(/context-(stroke|fill)/g, textColor));
+		}
 	});
+
+	// Strip clip-path refs so nothing accidentally clips the widened labels.
+	clone.querySelectorAll("[clip-path]").forEach((el) => {
+		el.removeAttribute("clip-path");
+	});
+
+	// Temporarily attach clone to DOM (offscreen) so we can measure HTML content
+	// widths with the substituted fonts applied.
+	const measureHost = document.createElement("div");
+	measureHost.style.position = "fixed";
+	measureHost.style.top = "-99999px";
+	measureHost.style.left = "-99999px";
+	measureHost.style.visibility = "hidden";
+	measureHost.style.pointerEvents = "none";
+	measureHost.appendChild(clone);
+	document.body.appendChild(measureHost);
+
+	// Widen each foreignObject to fit its content under the substituted font.
+	// NOTE: we intentionally do NOT widen the surrounding node/cluster <rect>.
+	// Mermaid routes arrow endpoints to the rect's original geometry; widening
+	// the rect would move it past the arrow tips and hide the arrowhead markers
+	// behind the widened box. Leaving the rect alone keeps arrows intact.
+	// With the platform UI font stack above, text width is close enough to the
+	// original that any spill beyond the box is minimal.
+	clone.querySelectorAll("foreignObject").forEach((fo) => {
+		const foEl = fo as SVGForeignObjectElement;
+		const inner = foEl.firstElementChild;
+		if (!(inner instanceof HTMLElement)) return;
+
+		const contentWidth = Math.max(inner.scrollWidth, inner.offsetWidth);
+		const contentHeight = Math.max(inner.scrollHeight, inner.offsetHeight);
+		const currentWidth = parseFloat(foEl.getAttribute("width") || "0");
+		const currentHeight = parseFloat(foEl.getAttribute("height") || "0");
+		const currentX = parseFloat(foEl.getAttribute("x") || "0");
+		const currentY = parseFloat(foEl.getAttribute("y") || "0");
+
+		if (contentWidth > 0 && contentWidth > currentWidth) {
+			const newWidth = contentWidth + 4;
+			const dx = (newWidth - currentWidth) / 2;
+			foEl.setAttribute("width", String(newWidth));
+			foEl.setAttribute("x", String(currentX - dx));
+		}
+		if (contentHeight > 0 && contentHeight > currentHeight) {
+			const newHeight = contentHeight + 4;
+			const dy = (newHeight - currentHeight) / 2;
+			foEl.setAttribute("height", String(newHeight));
+			foEl.setAttribute("y", String(currentY - dy));
+		}
+	});
+
+	let vbX = 0, vbY = 0, vbW = 0, vbH = 0;
+	const origViewBox = svg.getAttribute("viewBox");
+	if (origViewBox) {
+		const parts = origViewBox.split(/[\s,]+/);
+		vbX = parseFloat(parts[0] || "0");
+		vbY = parseFloat(parts[1] || "0");
+		vbW = parseFloat(parts[2] || "0");
+		vbH = parseFloat(parts[3] || "0");
+	}
+
+	try {
+		const bbox = (clone as SVGSVGElement).getBBox();
+		if (bbox.width > 0 && bbox.height > 0) {
+			const minX = vbW > 0 ? Math.min(vbX, bbox.x) : bbox.x;
+			const minY = vbH > 0 ? Math.min(vbY, bbox.y) : bbox.y;
+			const maxX = vbW > 0 ? Math.max(vbX + vbW, bbox.x + bbox.width) : bbox.x + bbox.width;
+			const maxY = vbH > 0 ? Math.max(vbY + vbH, bbox.y + bbox.height) : bbox.y + bbox.height;
+			vbX = minX;
+			vbY = minY;
+			vbW = maxX - minX;
+			vbH = maxY - minY;
+		}
+	} catch {
+		// getBBox can throw if the element isn't rendered; keep viewBox as-is.
+	}
+
+	measureHost.removeChild(clone);
+	document.body.removeChild(measureHost);
+
+	// Pad generously to absorb any remaining font metric variance.
+	const pad = 20;
+	if (vbW > 0 && vbH > 0) {
+		vbX -= pad;
+		vbY -= pad;
+		vbW += pad * 2;
+		vbH += pad * 2;
+		clone.setAttribute("viewBox", `${vbX} ${vbY} ${vbW} ${vbH}`);
+		clone.setAttribute("width", String(vbW));
+		clone.setAttribute("height", String(vbH));
+	}
+	clone.setAttribute("overflow", "visible");
+
+	const bgX = vbW > 0 ? String(vbX) : "0";
+	const bgY = vbH > 0 ? String(vbY) : "0";
+	const bgWidth = vbW > 0 ? String(vbW) : "100%";
+	const bgHeight = vbH > 0 ? String(vbH) : "100%";
 
 	const bgRect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
 	bgRect.setAttribute("x", bgX);
@@ -235,15 +218,10 @@ function createPngSvgFallback(svg: SVGElement, backgroundColor: string): string 
 	return '<?xml version="1.0" encoding="UTF-8"?>\n' + svgString;
 }
 
-async function createPngSvg(svg: SVGElement, container: HTMLElement, backgroundColor: string): Promise<string> {
-	const source = findMermaidSource(container);
-	if (source) {
-		const rendered = await renderMermaidForExport(source, backgroundColor);
-		if (rendered) {
-			return rendered;
-		}
-	}
-
+async function createPngSvg(svg: SVGElement, _container: HTMLElement, backgroundColor: string): Promise<string> {
+	// Rasterize the already-rendered DOM SVG so the export matches the preview exactly.
+	// Re-rendering in a detached context produced a viewBox that cut off text whose
+	// width differed under font substitution.
 	return createPngSvgFallback(svg, backgroundColor);
 }
 
@@ -294,12 +272,38 @@ function getContainerBackgroundColor(container: HTMLElement): string {
 	return defaultColor;
 }
 
-async function svgToPng(svg: SVGElement, container: HTMLElement, backgroundColor: string, scale: number = 2): Promise<Blob> {
-	let { width, height } = getSvgDimensions(svg);
-	if (width === 0) width = 800;
-	if (height === 0) height = 600;
+function getIntrinsicSvgDimensions(svgString: string): { width: number; height: number } {
+	const parser = new DOMParser();
+	const doc = parser.parseFromString(svgString, "image/svg+xml");
+	const svgEl = doc.querySelector("svg");
+	if (!svgEl) return { width: 800, height: 600 };
 
+	const viewBox = svgEl.getAttribute("viewBox");
+	if (viewBox) {
+		const parts = viewBox.split(/[\s,]+/);
+		const w = parseFloat(parts[2] || "0");
+		const h = parseFloat(parts[3] || "0");
+		if (w > 0 && h > 0) return { width: w, height: h };
+	}
+
+	const widthAttr = parseFloat((svgEl.getAttribute("width") || "").replace(/px$/, ""));
+	const heightAttr = parseFloat((svgEl.getAttribute("height") || "").replace(/px$/, ""));
+	if (widthAttr > 0 && heightAttr > 0) return { width: widthAttr, height: heightAttr };
+
+	return { width: 800, height: 600 };
+}
+
+async function svgToPng(svg: SVGElement, container: HTMLElement, backgroundColor: string, scale: number = 2): Promise<Blob> {
 	let svgString = await createPngSvg(svg, container, backgroundColor);
+
+	// Use intrinsic SVG dimensions (from viewBox/attributes) rather than the rendered
+	// clientWidth/clientHeight, so CSS max-width caps don't degrade export resolution.
+	let { width, height } = getIntrinsicSvgDimensions(svgString);
+	if (width === 0) {
+		const fallback = getSvgDimensions(svg);
+		width = fallback.width || 800;
+		height = fallback.height || 600;
+	}
 
 	svgString = svgString.replace(/<image[^>]*xlink:href=["']https?:[^"']*["'][^>]*>/gi, "");
 	svgString = svgString.replace(/<image[^>]*href=["']https?:[^"']*["'][^>]*>/gi, "");
@@ -359,13 +363,13 @@ async function svgToPng(svg: SVGElement, container: HTMLElement, backgroundColor
 	});
 }
 
-async function exportMermaid(app: App, svg: SVGElement, container: HTMLElement): Promise<void> {
+async function exportMermaid(app: App, svg: SVGElement, container: HTMLElement, scale: number): Promise<void> {
 	const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
 	const filename = `mermaid-${timestamp}.png`;
 
 	try {
 		const backgroundColor = getContainerBackgroundColor(container);
-		const blob = await svgToPng(svg, container, backgroundColor, 2);
+		const blob = await svgToPng(svg, container, backgroundColor, scale);
 
 		await shareOrDownload({
 			data: blob,
@@ -416,7 +420,7 @@ function createExportButton(): HTMLButtonElement {
 	return btn;
 }
 
-function addExportButtonToContainer(app: App, container: HTMLElement, svg: SVGElement): void {
+function addExportButtonToContainer(app: App, container: HTMLElement, svg: SVGElement, getScale: () => number): void {
 	if (container.querySelector(".mv-mermaid-export-btn")) {
 		return;
 	}
@@ -428,18 +432,20 @@ function addExportButtonToContainer(app: App, container: HTMLElement, svg: SVGEl
 	btn.addEventListener("click", (e) => {
 		e.preventDefault();
 		e.stopPropagation();
-		void exportMermaid(app, svg, container);
+		void exportMermaid(app, svg, container, getScale());
 	});
 }
 
 export class MermaidExporter {
 	private app: App;
 	private enabled: boolean;
+	private getScale: () => number;
 	private observer: MutationObserver | null = null;
 
-	constructor(app: App, enabled: boolean) {
+	constructor(app: App, enabled: boolean, getScale: () => number) {
 		this.app = app;
 		this.enabled = enabled;
+		this.getScale = getScale;
 	}
 
 	start() {
@@ -474,7 +480,7 @@ export class MermaidExporter {
 			const container = svg.parentElement;
 			if (!container) return;
 
-			addExportButtonToContainer(this.app, container, svg);
+			addExportButtonToContainer(this.app, container, svg, this.getScale);
 		});
 	}
 }

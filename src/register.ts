@@ -71,6 +71,7 @@ export function setupMermaidExport(plugin: MermaidVersionPlugin): void {
 	plugin.mermaidExporter = new MermaidExporter(
 		plugin.app,
 		plugin.settings.exportEnabled,
+		() => plugin.settings.exportScale || 2,
 	);
 	plugin.app.workspace.onLayoutReady(() => {
 		plugin.mermaidExporter?.start();

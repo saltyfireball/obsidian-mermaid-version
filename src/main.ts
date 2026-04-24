@@ -10,6 +10,7 @@ export interface MermaidVersionSettings {
 	centered: boolean;
 	// Export
 	exportEnabled: boolean;
+	exportScale: number;
 	// Custom version
 	customVersionEnabled: boolean;
 	customVersionUrl: string;
@@ -21,6 +22,7 @@ export const DEFAULT_SETTINGS: MermaidVersionSettings = {
 	maxWidth: 0,
 	centered: false,
 	exportEnabled: true,
+	exportScale: 3,
 	customVersionEnabled: false,
 	customVersionUrl: "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js",
 };
