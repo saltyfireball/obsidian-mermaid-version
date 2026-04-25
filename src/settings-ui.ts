@@ -1,7 +1,6 @@
 import { Notice, Setting } from "obsidian";
 import type MermaidVersionPlugin from "./main";
-import { loadCustomMermaid, reRenderMermaidDiagrams } from "./auto-sizer";
-import { setupMermaidAutoSize, stopMermaidAutoSize } from "./register";
+import { applyCustomMermaidVersion, setupMermaidAutoSize, stopMermaidAutoSize } from "./register";
 
 interface MermaidSettingsParams {
   plugin: MermaidVersionPlugin;
@@ -61,17 +60,27 @@ function renderCustomMermaidSection({ plugin, containerEl }: MermaidSettingsPara
   // Enable toggle
   new Setting(containerEl)
     .setName("Use custom Mermaid version")
-    .setDesc("Load a custom Mermaid version from CDN instead of Obsidian's bundled version. Requires Obsidian restart to take effect.")
+    .setDesc("Load a custom Mermaid version from CDN instead of Obsidian's bundled version. Applies immediately when enabled; disabling requires a restart to revert to the bundled version.")
     .addToggle((toggle) =>
       toggle
         .setValue(settings.customVersionEnabled)
         .onChange(async (value) => {
           settings.customVersionEnabled = value;
           await plugin.saveSettings();
-          new Notice(value
-            ? "Custom Mermaid enabled. Restart Obsidian to apply."
-            : "Custom Mermaid disabled. Restart Obsidian to revert to bundled version."
-          );
+          if (value && settings.customVersionUrl) {
+            const version = await applyCustomMermaidVersion(plugin, settings.customVersionUrl);
+            if (version) {
+              versionDisplay.empty();
+              versionDisplay.createEl("span", {
+                text: `Current Mermaid version: ${version}`,
+              });
+              new Notice(`Loaded Mermaid ${version}`);
+            } else {
+              new Notice("Failed to load custom Mermaid. Check the URL and console.");
+            }
+          } else if (!value) {
+            new Notice("Custom Mermaid disabled. Restart Obsidian to revert to the bundled version.");
+          }
         })
     );
 
@@ -140,16 +149,13 @@ function renderCustomMermaidSection({ plugin, containerEl }: MermaidSettingsPara
           btn.setButtonText("Loading...");
 
           try {
-            const version = await loadCustomMermaid(settings.customVersionUrl);
+            const version = await applyCustomMermaidVersion(plugin, settings.customVersionUrl);
             if (version) {
-              // Update version display
               versionDisplay.empty();
               versionDisplay.createEl("span", {
                 text: `Current Mermaid version: ${version}`,
               });
-
-              const count = await reRenderMermaidDiagrams();
-              new Notice(`Loaded Mermaid ${version}, re-rendered ${count} diagram(s)`);
+              new Notice(`Loaded Mermaid ${version}`);
             } else {
               new Notice("Failed to load custom Mermaid. Check console for details.");
             }

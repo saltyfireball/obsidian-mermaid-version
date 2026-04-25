@@ -1,5 +1,5 @@
-import { Plugin, PluginSettingTab, App } from "obsidian";
-import { registerMermaid } from "./register";
+import { Plugin, PluginSettingTab, App, Notice } from "obsidian";
+import { applyCustomMermaidVersion, forceReRenderAllViews, registerMermaid } from "./register";
 import { renderSettingsTab } from "./settings-ui";
 
 export interface MermaidVersionSettings {
@@ -29,7 +29,7 @@ export const DEFAULT_SETTINGS: MermaidVersionSettings = {
 
 export default class MermaidVersionPlugin extends Plugin {
 	settings!: MermaidVersionSettings;
-	mermaidAutoSizer?: { start(): void; stop(): void; onCustomVersionLoaded(): void };
+	mermaidAutoSizer?: { start(): void; stop(): void };
 	mermaidExporter?: { start(): void; stop(): void };
 	customVersionLoaded = false;
 
@@ -39,6 +39,39 @@ export default class MermaidVersionPlugin extends Plugin {
 		if (this.settings.enabled) {
 			registerMermaid(this);
 		}
+
+		this.addCommand({
+			id: "reapply-custom-mermaid",
+			name: "Re-apply custom Mermaid version (fetch + re-render)",
+			callback: async () => {
+				if (!this.settings.customVersionUrl) {
+					new Notice("No custom Mermaid URL configured.");
+					return;
+				}
+				const version = await applyCustomMermaidVersion(
+					this,
+					this.settings.customVersionUrl,
+				);
+				new Notice(
+					version
+						? `Re-applied Mermaid ${version}`
+						: "Failed to apply custom Mermaid. Check the console.",
+				);
+			},
+		});
+
+		this.addCommand({
+			id: "rerender-mermaid",
+			name: "Re-render Mermaid diagrams (both modes)",
+			callback: async () => {
+				if (!this.customVersionLoaded) {
+					new Notice("Custom Mermaid isn't loaded yet.");
+					return;
+				}
+				await forceReRenderAllViews(this);
+				new Notice("Re-rendered Mermaid diagrams");
+			},
+		});
 
 		this.addSettingTab(new MermaidVersionSettingTab(this.app, this));
 	}

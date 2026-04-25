@@ -9,10 +9,29 @@ interface PrintBackup {
 }
 
 /**
- * Load a custom mermaid version from CDN.
+ * Detect the version string from a window.mermaid instance. Handles both the
+ * top-level shape and the .default-nested shape some UMD bundles produce.
+ */
+export function detectMermaidVersion(mermaid: unknown): string {
+	if (!mermaid || typeof mermaid !== "object") return "unknown";
+	const anyMermaid = mermaid as Record<string, unknown>;
+	const nested = anyMermaid.default as Record<string, unknown> | undefined;
+	return (
+		(anyMermaid.version as string | undefined) ??
+		((anyMermaid.mermaidAPI as { version?: string } | undefined)?.version) ??
+		(nested?.version as string | undefined) ??
+		((nested?.mermaidAPI as { version?: string } | undefined)?.version) ??
+		"unknown"
+	);
+}
+
+/**
+ * Fallback loader: attach a <script src="..."> tag. Used when we can't fetch
+ * the script text directly (e.g. CORS refusal). No caching is possible on this
+ * path since the browser handles the fetch opaquely.
  * Returns the loaded version string, or null if failed.
  */
-export async function loadCustomMermaid(url: string): Promise<string | null> {
+export async function loadCustomMermaidViaScriptTag(url: string): Promise<string | null> {
 	const isEsm = url.includes("+esm") || url.includes("/esm/") || url.endsWith(".mjs");
 	if (isEsm) {
 		console.warn("ESM module URLs are not supported. Please use the UMD build (mermaid.min.js)");
@@ -32,13 +51,12 @@ export async function loadCustomMermaid(url: string): Promise<string | null> {
 
 		script.onload = () => {
 			const mermaid = window.mermaid;
-			if (mermaid) {
-				const version = mermaid.version ?? mermaid.mermaidAPI?.version ?? "unknown";
-				resolve(version);
-			} else {
+			if (!mermaid) {
 				console.error("Mermaid script loaded but window.mermaid not found");
 				resolve(null);
+				return;
 			}
+			resolve(detectMermaidVersion(mermaid));
 		};
 
 		script.onerror = (err) => {
@@ -50,73 +68,6 @@ export async function loadCustomMermaid(url: string): Promise<string | null> {
 	});
 }
 
-/**
- * Re-render all mermaid diagrams on the page.
- * Call this after loading a custom mermaid version.
- */
-export async function reRenderMermaidDiagrams(): Promise<number> {
-	const mermaid = window.mermaid;
-	if (!mermaid) {
-		console.warn("Mermaid not available for re-rendering");
-		return 0;
-	}
-
-	mermaid.initialize({ startOnLoad: false });
-
-	const selectors = [
-		".mermaid[data-mermaid]",
-		".mermaid:not(.mermaid-processed)",
-		"pre.language-mermaid",
-		".markdown-preview-view .mermaid",
-		".cm-preview-code-block .mermaid",
-	];
-
-	const allContainers = new Set<Element>();
-	for (const selector of selectors) {
-		const found = document.querySelectorAll(selector);
-		found.forEach((el) => allContainers.add(el));
-	}
-
-	let rendered = 0;
-
-	for (const container of allContainers) {
-		let source = container.getAttribute("data-mermaid");
-
-		if (!source) {
-			const codeEl = container.querySelector("code");
-			if (codeEl) {
-				source = codeEl.textContent;
-			}
-		}
-
-		if (!source && container.tagName === "PRE") {
-			source = container.textContent;
-		}
-
-		if (!source) {
-			continue;
-		}
-
-		try {
-			const id = `mermaid-rerender-${Date.now()}-${rendered}`;
-			const { svg } = await mermaid.render(id, source);
-			const parser = new DOMParser();
-			const doc = parser.parseFromString(svg, "image/svg+xml");
-			const svgEl = doc.documentElement;
-			while (container.firstChild) {
-				container.removeChild(container.firstChild);
-			}
-			container.appendChild(document.importNode(svgEl, true));
-			container.classList.add("mermaid-processed");
-			rendered++;
-		} catch (err) {
-			console.warn("Failed to re-render mermaid diagram:", err);
-		}
-	}
-
-	return rendered;
-}
-
 export class MermaidAutoSizer {
 	private plugin: MermaidVersionPlugin;
 	private settings: MermaidVersionSettings;
@@ -126,31 +77,12 @@ export class MermaidAutoSizer {
 	private beforePrintHandler: (() => void) | null = null;
 	private afterPrintHandler: (() => void) | null = null;
 	private debounceTimer: ReturnType<typeof setTimeout> | null = null;
-	private reRenderTimer: ReturnType<typeof setTimeout> | null = null;
 	private printBackups: PrintBackup[] | null = null;
 	private fullyStarted = false;
-	private reRendering = false;
 
 	constructor(plugin: MermaidVersionPlugin, settings: MermaidVersionSettings) {
 		this.plugin = plugin;
 		this.settings = settings;
-	}
-
-	/**
-	 * Called when the custom CDN Mermaid version finishes loading.
-	 * Re-renders all existing diagrams that were rendered with Obsidian's built-in version.
-	 */
-	onCustomVersionLoaded(): void {
-		const containers = new Set<Element>();
-		document.querySelectorAll(".mermaid").forEach((el) => {
-			// Only re-render diagrams not already rendered with custom version
-			if (el.getAttribute("data-mv-rendered") !== "true") {
-				containers.add(el);
-			}
-		});
-		if (containers.size > 0) {
-			void this.reRenderContainers(containers);
-		}
 	}
 
 	start() {
@@ -197,48 +129,41 @@ export class MermaidAutoSizer {
 		if (this.fullyStarted) return;
 		this.fullyStarted = true;
 
-		if (this.plugin.customVersionLoaded) {
-			this.onCustomVersionLoaded();
-		} else {
-			this.sizeMermaidSvgs();
-		}
+		this.sizeMermaidSvgs();
 
 		this.observer = new MutationObserver((mutations) => {
-			if (this.reRendering) return;
-
-			const changedContainers = new Set<Element>();
+			let shouldSize = false;
 			for (const mutation of mutations) {
 				for (const node of Array.from(mutation.addedNodes)) {
 					if (node instanceof HTMLElement) {
-						if (node.classList?.contains("mermaid")) {
-							changedContainers.add(node);
-						} else if (node.querySelector?.(".mermaid")) {
-							node.querySelectorAll(".mermaid").forEach((el) => changedContainers.add(el));
+						if (
+							node.classList?.contains("mermaid") ||
+							node.querySelector?.(".mermaid")
+						) {
+							shouldSize = true;
 						}
 					}
-					// Detect SVG replaced inside an existing .mermaid container
-					// (live preview re-renders SVG content without re-adding .mermaid)
-					if (node instanceof SVGElement && node.parentElement?.classList?.contains("mermaid")) {
-						const parent = node.parentElement;
-						// Obsidian re-rendered over our custom render; clear marker so we re-render
-						parent.removeAttribute("data-mv-rendered");
-						changedContainers.add(parent);
+					// New SVG inside a .mermaid -- mermaid just re-rendered the diagram.
+					// Clear the sized marker so sizeMermaidSvgs picks it up and re-applies
+					// max-width; otherwise a stale data-auto-sized flag would skip it.
+					if (
+						node instanceof SVGElement &&
+						node.parentElement?.classList?.contains("mermaid")
+					) {
+						const existing = node.parentElement.querySelector("svg[data-auto-sized]");
+						if (existing) existing.removeAttribute("data-auto-sized");
+						shouldSize = true;
 					}
 				}
 				if (mutation.target instanceof HTMLElement) {
-					const mermaidEl = mutation.target.closest?.(".mermaid");
-					if (mermaidEl) {
-						changedContainers.add(mermaidEl);
+					if (mutation.target.closest?.(".mermaid")) {
+						shouldSize = true;
 					}
 				}
 			}
 
-			if (changedContainers.size > 0) {
-				if (this.plugin.customVersionLoaded && window.mermaid) {
-					this.debouncedReRender(changedContainers);
-				} else {
-					this.debouncedSize();
-				}
+			if (shouldSize) {
+				this.debouncedSize();
 			}
 		});
 
@@ -280,9 +205,7 @@ export class MermaidAutoSizer {
 		if (this.afterPrintHandler)
 			window.removeEventListener("afterprint", this.afterPrintHandler);
 		if (this.debounceTimer) clearTimeout(this.debounceTimer);
-		if (this.reRenderTimer) clearTimeout(this.reRenderTimer);
 		this.fullyStarted = false;
-		this.reRendering = false;
 
 		document
 			.querySelectorAll(".mermaid-scroll, .mermaid-fit, .mermaid-centered")
@@ -306,60 +229,6 @@ export class MermaidAutoSizer {
 		this.debounceTimer = setTimeout(() => {
 			this.sizeMermaidSvgs();
 		}, 100);
-	}
-
-	private debouncedReRender(containers: Set<Element>) {
-		if (this.reRenderTimer) clearTimeout(this.reRenderTimer);
-		this.reRenderTimer = setTimeout(() => {
-			void this.reRenderContainers(containers);
-		}, 150);
-	}
-
-	private async reRenderContainers(containers: Set<Element>): Promise<void> {
-		const mermaid = window.mermaid;
-		if (!mermaid) return;
-
-		this.reRendering = true;
-		mermaid.initialize({ startOnLoad: false });
-
-		let rendered = 0;
-		for (const container of containers) {
-			// Skip if already re-rendered with custom version
-			if (container.getAttribute("data-mv-rendered") === "true") continue;
-
-			let source = container.getAttribute("data-mermaid");
-			if (!source) {
-				const codeEl = container.querySelector("code");
-				if (codeEl) {
-					source = codeEl.textContent;
-				}
-			}
-			if (!source && container.tagName === "PRE") {
-				source = container.textContent;
-			}
-			if (!source) continue;
-
-			try {
-				const id = `mermaid-lp-${Date.now()}-${rendered}`;
-				const { svg } = await mermaid.render(id, source);
-				const parser = new DOMParser();
-				const doc = parser.parseFromString(svg, "image/svg+xml");
-				const svgEl = doc.documentElement;
-				while (container.firstChild) {
-					container.removeChild(container.firstChild);
-				}
-				container.appendChild(document.importNode(svgEl, true));
-				container.setAttribute("data-mv-rendered", "true");
-				rendered++;
-			} catch {
-				// Custom version also failed - leave Obsidian's render in place
-			}
-		}
-
-		this.reRendering = false;
-		if (rendered > 0) {
-			this.debouncedSize();
-		}
 	}
 
 	private resetAndResize() {
@@ -395,14 +264,13 @@ export class MermaidAutoSizer {
 				}
 
 				const maxWidthSetting = this.settings.maxWidth;
+				const renderWidth = maxWidthSetting > 0
+					? Math.min(intrinsicWidth, maxWidthSetting)
+					: intrinsicWidth;
 
-				if (intrinsicWidth > containerWidth) {
+				if (renderWidth > containerWidth) {
 					container.classList.add("mermaid-scroll");
 					container.classList.remove("mermaid-fit", "mermaid-centered");
-
-					const renderWidth = maxWidthSetting > 0
-						? Math.min(intrinsicWidth, maxWidthSetting)
-						: intrinsicWidth;
 
 					this.setSvgStyles(svg, `${renderWidth}px`, "none", `${renderWidth}px`);
 				} else {
@@ -415,7 +283,7 @@ export class MermaidAutoSizer {
 						container.classList.remove("mermaid-centered");
 					}
 
-					this.setSvgStyles(svg, `${intrinsicWidth}px`, "100%", "0");
+					this.setSvgStyles(svg, `${renderWidth}px`, "100%", "0");
 				}
 			});
 	}
